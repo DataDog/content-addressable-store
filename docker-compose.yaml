@@ -1,0 +1,19 @@
+version: '3'
+services:
+  agent:
+    image: datadog/agent:latest
+    network_mode: host
+    healthcheck:
+      interval: 1s # speeds up container startup
+      start_period: 60s # prevents health checks from failing during startup
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=${DD_SITE:-}
+      - DD_ENV=${USER}
+      - DD_HOSTNAME=${HOSTNAME:-}
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_APM_MAX_TPS=100
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup:/host/sys/fs/cgroup:ro
