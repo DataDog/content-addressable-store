@@ -62,11 +62,13 @@ func (s *Service) serveStore(w http.ResponseWriter, r *http.Request, _ httproute
 
 	// Rename temporary file to data directory using the sha1 hash as the filename
 	hash := fmt.Sprintf("%x", hasher.Sum(nil))
-	if err := os.Rename(file.Name(), filepath.Join(s.dir, hash)); err != nil {
-		err = fmt.Errorf("failed to rename file: %w", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	go func() {
+		if err := os.Rename(file.Name(), filepath.Join(s.dir, hash)); err != nil {
+			err = fmt.Errorf("failed to rename file: %w", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}()
 
 	// Respond with the sha1 hash
 	fmt.Fprintf(w, "%s\n", hash)

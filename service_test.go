@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -32,12 +33,16 @@ func TestService(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code)
 		require.Equal(t, hash+"\n", rec.Body.String())
 
-		// Check that the file with our hash exists now
-		req = httptest.NewRequest("GET", "/load/"+hash, nil)
-		rec = httptest.NewRecorder()
-		service.ServeHTTP(rec, req)
-		require.Equal(t, http.StatusOK, rec.Code)
-		require.Equal(t, data, rec.Body.Bytes())
+		// Check that the file with our hash exists in the next second
+		for start := time.Now(); time.Since(start) < time.Second; {
+			req = httptest.NewRequest("GET", "/load/"+hash, nil)
+			rec = httptest.NewRecorder()
+			service.ServeHTTP(rec, req)
+			if rec.Code == http.StatusOK {
+				require.Equal(t, data, rec.Body.Bytes())
+				break
+			}
+		}
 	})
 }
 

@@ -10,7 +10,7 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
 )
 
-const version = "v1"
+const version = "v2"
 
 func main() {
 	// Parse flags
