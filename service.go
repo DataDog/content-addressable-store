@@ -88,9 +88,24 @@ func (s *Service) serveLoad(w http.ResponseWriter, r *http.Request, p httprouter
 // MultiCopy copies data from r to all writers. Both reads and writes are done
 // concurrently while trying to minimize buffer sizes.
 func MultiCopy(r io.Reader, writers ...io.Writer) error {
-	var write = make([]chan []byte, len(writers))
+	const maxBufs = 2
+	var (
+		free  = make([]chan []byte, len(writers))
+		write = make([]chan []byte, len(writers))
+	)
+
+	// Initialize free and write buffer management channels for each writer
 	for i := 0; i < len(writers); i++ {
-		write[i] = make(chan []byte, 10)
+		free[i] = make(chan []byte, maxBufs)
+		write[i] = make(chan []byte, maxBufs)
+	}
+
+	// Allocate maxBufs buffers and put them into each free channel
+	for i := 0; i < maxBufs; i++ {
+		buf := make([]byte, 32*1024)
+		for j := 0; j < len(writers); j++ {
+			free[j] <- buf
+		}
 	}
 
 	var eg errgroup.Group
@@ -101,14 +116,21 @@ func MultiCopy(r io.Reader, writers ...io.Writer) error {
 				if _, err := writers[i].Write(buf); err != nil {
 					return err
 				}
+				buf = buf[0:cap(buf)]
+				free[i] <- buf
 			}
 			return nil
 		})
 	}
 
 	for {
+		// Get a free buf once all writers are done with it
+		var buf []byte
+		for i := 0; i < len(writers); i++ {
+			buf = <-free[i]
+		}
+
 		// Read into the buf
-		buf := make([]byte, 32*1024)
 		n, err := r.Read(buf)
 		if err == io.EOF {
 			break
