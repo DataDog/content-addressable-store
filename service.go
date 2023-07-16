@@ -102,7 +102,7 @@ func MultiCopy(r io.Reader, writers ...io.Writer) error {
 
 	// Allocate maxBufs buffers and put them into each free channel
 	for i := 0; i < maxBufs; i++ {
-		buf := make([]byte, 32*1024)
+		buf := make([]byte, 1024*1024)
 		for j := 0; j < len(writers); j++ {
 			free[j] <- buf
 		}
