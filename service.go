@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/julienschmidt/httprouter"
+	"golang.org/x/sync/errgroup"
 	tracerouter "gopkg.in/DataDog/dd-trace-go.v1/contrib/julienschmidt/httprouter"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
@@ -53,9 +54,8 @@ func (s *Service) serveStore(w http.ResponseWriter, r *http.Request, _ httproute
 
 	// Pipe upload into temporary file and sha1 hasher
 	hasher := sha1.New()
-	mw := io.MultiWriter(hasher, file)
-	if _, err := io.Copy(mw, r.Body); err != nil {
-		err = fmt.Errorf("failed to write file: %w", err)
+	if err := MultiCopy(r.Body, hasher, file); err != nil {
+		err = fmt.Errorf("failed to hash or write to file: %w", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -83,4 +83,48 @@ func (s *Service) serveLoad(w http.ResponseWriter, r *http.Request, p httprouter
 		return
 	}
 	io.Copy(w, file)
+}
+
+// MultiCopy copies data from r to all writers. Both reads and writes are done
+// concurrently while trying to minimize buffer sizes.
+func MultiCopy(r io.Reader, writers ...io.Writer) error {
+	var write = make([]chan []byte, len(writers))
+	for i := 0; i < len(writers); i++ {
+		write[i] = make(chan []byte, 10)
+	}
+
+	var eg errgroup.Group
+	for i := 0; i < len(writers); i++ {
+		i := i
+		eg.Go(func() error {
+			for buf := range write[i] {
+				if _, err := writers[i].Write(buf); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+
+	for {
+		// Read into the buf
+		buf := make([]byte, 32*1024)
+		n, err := r.Read(buf)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return err
+		}
+
+		// Dispatch buf to all writers
+		for i := 0; i < len(writers); i++ {
+			write[i] <- buf[0:n]
+		}
+	}
+
+	// Signal all writers to finish and wait for them
+	for i := 0; i < len(writers); i++ {
+		close(write[i])
+	}
+	return eg.Wait()
 }

@@ -2,7 +2,10 @@ module github.com/DataDog/content-addressable-store
 
 go 1.20
 
-require gopkg.in/DataDog/dd-trace-go.v1 v1.52.0
+require (
+	golang.org/x/sync v0.1.0
+	gopkg.in/DataDog/dd-trace-go.v1 v1.52.0
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
